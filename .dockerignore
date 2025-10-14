@@ -1,0 +1,11 @@
+# Ignora file non necessari per l'immagine
+.git
+.gitignore
+.github
+node_modules
+npm-debug.log
+.DS_Store
+*.md
+*.pdf
+README.md
+DEPLOY.md
