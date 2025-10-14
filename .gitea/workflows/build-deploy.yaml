@@ -32,19 +32,44 @@ jobs:
 
       - name: Debug Docker setup
         run: |
-          echo "=== Docker Environment ==="
-          echo "DOCKER_HOST: ${DOCKER_HOST}"
-          echo "DOCKER_TLS_VERIFY: ${DOCKER_TLS_VERIFY}"
-          echo "DOCKER_CERT_PATH: ${DOCKER_CERT_PATH}"
+          echo "=== Docker Environment Variables ==="
+          env | grep -i docker || echo "No DOCKER_* vars found"
           echo ""
-          echo "=== Docker CLI Check ==="
-          docker version
-          docker ps
+          echo "=== Checking for Docker socket ==="
+          ls -la /var/run/docker.sock 2>/dev/null || echo "Socket not found at /var/run/docker.sock"
+          echo ""
+          echo "=== Checking for certificates ==="
+          ls -la /certs/client/ 2>/dev/null || echo "Certs not found at /certs/client"
+          echo ""
+          echo "=== Docker CLI version ==="
+          docker version 2>&1 | head -20
+
+      - name: Configure Docker for remote host
+        run: |
+          # Setup Docker per connettersi al daemon remoto con TLS
+          export DOCKER_HOST=tcp://127.0.0.1:2376
+          export DOCKER_TLS_VERIFY=1
+          export DOCKER_CERT_PATH=/certs/client
+          
+          echo "DOCKER_HOST=${DOCKER_HOST}" >> $GITHUB_ENV
+          echo "DOCKER_TLS_VERIFY=${DOCKER_TLS_VERIFY}" >> $GITHUB_ENV
+          echo "DOCKER_CERT_PATH=${DOCKER_CERT_PATH}" >> $GITHUB_ENV
+
+      - name: Test Docker connection
+        run: |
+          echo "Testing Docker with TLS..."
+          docker --tlsverify --tlscacert=$DOCKER_CERT_PATH/ca.pem \
+                 --tlscert=$DOCKER_CERT_PATH/cert.pem \
+                 --tlskey=$DOCKER_CERT_PATH/key.pem \
+                 -H=tcp://127.0.0.1:2376 ps
 
       - name: Build Docker image
         run: |
           echo "Building image: ${{ steps.meta.outputs.tag }}"
-          docker build \
+          docker --tlsverify --tlscacert=$DOCKER_CERT_PATH/ca.pem \
+                 --tlscert=$DOCKER_CERT_PATH/cert.pem \
+                 --tlskey=$DOCKER_CERT_PATH/key.pem \
+                 -H=tcp://127.0.0.1:2376 build \
             -t "${{ steps.meta.outputs.tag }}" \
             -t "${{ steps.meta.outputs.latest_tag }}" \
             --label "git.commit=${{ gitea.sha }}" \
@@ -54,7 +79,10 @@ jobs:
       - name: Log in to Gitea Container Registry
         if: github.event_name == 'push'
         run: |
-          echo "${{ secrets.TOKEN }}" | docker login \
+          echo "${{ secrets.TOKEN }}" | docker --tlsverify --tlscacert=$DOCKER_CERT_PATH/ca.pem \
+                                                --tlscert=$DOCKER_CERT_PATH/cert.pem \
+                                                --tlskey=$DOCKER_CERT_PATH/key.pem \
+                                                -H=tcp://127.0.0.1:2376 login \
             -u "${{ secrets.USERNAME }}" \
             --password-stdin \
             "${{ vars.PACKAGES_REGISTRY }}"
@@ -63,13 +91,23 @@ jobs:
         if: github.event_name == 'push'
         run: |
           echo "Pushing images..."
-          docker push "${{ steps.meta.outputs.tag }}"
-          docker push "${{ steps.meta.outputs.latest_tag }}"
+          docker --tlsverify --tlscacert=$DOCKER_CERT_PATH/ca.pem \
+                 --tlscert=$DOCKER_CERT_PATH/cert.pem \
+                 --tlskey=$DOCKER_CERT_PATH/key.pem \
+                 -H=tcp://127.0.0.1:2376 push "${{ steps.meta.outputs.tag }}"
+          docker --tlsverify --tlscacert=$DOCKER_CERT_PATH/ca.pem \
+                 --tlscert=$DOCKER_CERT_PATH/cert.pem \
+                 --tlskey=$DOCKER_CERT_PATH/key.pem \
+                 -H=tcp://127.0.0.1:2376 push "${{ steps.meta.outputs.latest_tag }}"
           echo "Push completed successfully"
 
       - name: Logout from Gitea Container Registry
         if: always()
-        run: docker logout "${{ vars.PACKAGES_REGISTRY }}" || true
+        run: |
+          docker --tlsverify --tlscacert=$DOCKER_CERT_PATH/ca.pem \
+                 --tlscert=$DOCKER_CERT_PATH/cert.pem \
+                 --tlskey=$DOCKER_CERT_PATH/key.pem \
+                 -H=tcp://127.0.0.1:2376 logout "${{ vars.PACKAGES_REGISTRY }}" || true
 
   deploy:
     name: Deploy to target
