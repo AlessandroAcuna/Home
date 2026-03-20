@@ -47,6 +47,6 @@ jobs:
             exit 0
           fi
           echo "Triggering deploy endpoint..."
-          curl --fail -s -X POST \
+          curl --fail -v -X POST \
             --user "${{ secrets.DEPLOY_USERNAME }}:${{ secrets.DEPLOY_PASSWORD }}" \
             "${{ vars.DEPLOY_URL }}"
