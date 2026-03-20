@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      packages: write
     outputs:
       image-tags: ${{ steps.meta.outputs.tags }}
     steps:
@@ -22,8 +20,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ vars.PACKAGES_REGISTRY }}
-          username: ${{ gitea.actor }}
-          password: ${{ gitea.token }}
+          username: ${{ secrets.USERNAME }
+          password: ${{ secrets.TOKEN }}
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
