@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
     outputs:
       image-tags: ${{ steps.meta.outputs.tags }}
     steps:
